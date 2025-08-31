@@ -1,0 +1,105 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build directory
+/.next/
+/out/
+
+# Static HTML export directory
+# Used by `next export`
+# /out/ # Sudah ada di atas, tapi bisa juga spesifik
+
+# Production build
+# Next.js >= 13.4.19
+/.next/cache
+
+# Local Environment Variables
+# Exclude all .env files except .env.example (if you have one)
+.env
+.env.local
+.env.*.local
+# If you want to commit .env for default non-sensitive values, then remove .env from here
+# but ALWAYS ignore .env.local and other environment-specific .local files.
+# Consider adding specific .env files you don't want to commit:
+# .env.development
+# .env.production
+# But keep .env.example or similar if you use it.
+
+# Test Results and Coverage
+/coverage
+/junit.xml
+/TEST_RESULTS.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# Optional User-specific files
+.DS_Store
+Thumbs.db
+
+# System files
+desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+
+# Optional files
+.eslintcache
+*.sqlite
+*.sqlite3
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Drizzle ORM (jika Anda menggunakan)
+# drizzle/*
+# !drizzle/meta # Anda mungkin ingin menyimpan meta jika perlu
+# !drizzle/schema.ts # Anda pasti ingin menyimpan schema Anda
+
+# TurboRepo
+.turbo
+
+# CELO : saya tidak tau ini apa, tapi biasanya ada di next js
+# Misc
+# .eslintcache
+# .firebase
+# .eslintignore
+# .stylelintignore
+# .prettierignore
+# .swc
+
+# Netlify
+.netlify
+
+# Vercel
+.vercel
+
+# Supabase
+# supabase/functions/.env
+# supabase/functions/.env.local
+# supabase/seed.sql # Tergantung apakah Anda ingin seed di-commit
+
+# Temporary files / User-specific
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~

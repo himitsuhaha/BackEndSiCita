@@ -1,0 +1,118 @@
+###
+//test apha
+POST http://localhost:5000/api/sensor-data
+Content-Type: application/json
+X-API-Key: "10987532d37358904f8c7a29a1872c35af1e948f6f1af871162e1697deaf4c8d"
+
+{
+  "deviceId": "esp32_alpha",
+  "waterLevel_cm": "300" 
+}
+
+###
+//test beta
+POST http://localhost:5000/api/sensor-data
+Content-Type: application/json
+X-API-Key: "b2d58603fcf9847d142a67f49a41d74b06d56c3c9ac4ea5089389396b98d2bc7"
+
+{
+  "deviceId": "esp32_beta",
+  "waterLevel_cm": "255" 
+}
+
+###
+//test gamma
+POST http://localhost:5000/api/sensor-data
+Content-Type: application/json
+X-API-Key: "69b899722888c26a008e099967cacfb1fe71095daac11a20f3ab33b9b6f477c3"
+
+
+{
+  "deviceId": "esp32_gamma",
+  "waterLevel_cm": "200" 
+}
+
+###
+//test awal web push notification
+POST http://localhost:5000/api/subscribe
+Content-Type: application/json
+
+{
+  "endpoint": "https://contoh.push.service.com/your-unique-endpoint-123",
+  "expirationTime": null,
+  "keys": {
+    "p256dh": "BL4hndGXTGIg9sYFFP_KejoR4v8B7hU2p3GCh31YSSq3D2s_fVr11tgojQx8U7L6fQKOVoY1ZEBi9DUVw319f8s",
+    "auth": "ANgZq0oH43g7QjYnF94nMw"
+  }
+}
+
+###
+//get sensor history by id
+GET http://localhost:5000/api/sensor-data/history/esp32_alpha
+Content-Type: application/json
+
+
+###
+//get data device by id
+GET http://localhost:5000/api/devices/esp32_beta
+Content-Type: application/json
+
+###
+//get all data device 
+GET http://localhost:5000/api/devices/
+Content-Type: application/json
+
+###
+//update data device 
+PATCH http://localhost:5000/api/devices/esp32_gamma
+Content-Type: application/json
+
+{
+  "location": "Sungai Ciliwung",
+  "alert_threshold_percentage": 0.80 
+}
+
+###
+//modifikasi atau menambahkan notifikasi per user  
+POST  http://localhost:5000/api/notification-preferences
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NDcyNzQxMjQsImV4cCI6MTc0NzI3NzcyNH0.oRpTfqZYy6OzRsFZmyQIZYU_AE3oX63w4w1TmRZF1GE
+Content-Type: application/json
+
+{
+  "subscriptionEndpoint": "https://fcm.googleapis.com/fcm/send/dbVLZ7s_lFY:APA91bHVyDzVDj0CKFad3ZLrnZmIFXzvZRE1AzwS7BKMgyje4WNhShj5v-t3deQ5ypvrZHi0VrX5VZErLXJHDsADj-Ao4QvLpGvNxHPmrIwY-r_bkfBtL-kFWYrFtY_CysjgcKP8xUdb",
+  "deviceIds": [ "esp32_alpha", "esp32_gamma" ]
+}
+
+
+###
+//get semua preferensi notifikasi
+GET http://localhost:5000/api/notification-preferences?subscriptionEndpoint=https://fcm.googleapis.com/fcm/send/dbVLZ7s_lFY:APA91bHVyDzVDj0CKFad3ZLrnZmIFXzvZRE1AzwS7BKMgyje4WNhShj5v-t3deQ5ypvrZHi0VrX5VZErLXJHDsADj-Ao4QvLpGvNxHPmrIwY-r_bkfBtL-kFWYrFtY_CysjgcKP8xUdb
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NDcyNzQxMjQsImV4cCI6MTc0NzI3NzcyNH0.oRpTfqZYy6OzRsFZmyQIZYU_AE3oX63w4w1TmRZF1GE
+Content-Type: application/json
+
+###
+//register user
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "email": "admin@mail.com",
+  "password": "11111111"
+}
+
+###
+//login user
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "emailOrUsername": "admin",
+  "password": "11111111"
+}
+
+###
+//generate api key
+POST http://localhost:5000/api/devices/esp32_alpha/api-key
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AbWFpbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NDcyOTczNzgsImV4cCI6MTc0NzMwMDk3OH0.h6kXPS5z5JWJ17anN6x6cc5z5CnBxfTHl68JYrOobDI
+Content-Type: application/json
