@@ -6,13 +6,6 @@ import { Server as SocketIOServer } from "socket.io";
 import passport from "passport";
 import admin from "firebase-admin";
 
-// ▼▼▼ PERBAIKAN DI SINI: Ganti cara memuat file JSON ▼▼▼
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-// ▲▲▲ AKHIR PERBAIKAN ▲▲▲
-
-
 import {
   PORT,
   ALLOWED_ORIGINS,
@@ -24,27 +17,26 @@ import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 import { deviceStatusService } from "./services/deviceStatus.service.js";
 import { DEVICE_STATUS_CHECK_INTERVAL_MS } from "./config/server.config.js";
 
-// ▼▼▼ PERBAIKAN DI SINI: Gunakan 'fs' untuk membaca file ▼▼▼
+// ▼▼▼ SOLUSI FINAL: Inisialisasi Firebase dari Environment Variable ▼▼▼
 try {
-  // Dapatkan path absolut ke direktori saat ini
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  // 1. Periksa apakah environment variable sudah diatur
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.");
+  }
   
-  // Buat path yang benar ke file serviceAccountKey.json
-  const serviceAccountPath = path.join(__dirname, 'config', 'serviceAccountKey.json');
-  
-  // Baca file dan parse sebagai JSON
-  const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  // 2. Parse konten JSON dari environment variable
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
 
+  // 3. Inisialisasi Firebase Admin SDK dengan kredensial yang sudah di-parse
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
-  console.log("Firebase Admin SDK berhasil diinisialisasi.");
+  console.log("Firebase Admin SDK successfully initialized from environment variable.");
 } catch (error) {
-  console.error("Gagal menginisialisasi Firebase Admin SDK. Pastikan file 'src/config/serviceAccountKey.json' ada dan benar.", error);
-  process.exit(1);
+  console.error("Failed to initialize Firebase Admin SDK. Ensure the FIREBASE_SERVICE_ACCOUNT_KEY environment variable is set correctly and is valid JSON.", error);
+  process.exit(1); // Hentikan server jika inisialisasi Firebase gagal
 }
-// ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+// ▲▲▲ AKHIR SOLUSI FINAL ▲▲▲
 
 const app = express();
 
