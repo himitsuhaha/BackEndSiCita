@@ -10,29 +10,28 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JajanToons/BackEndSiCita.git"
+    "url": "git+https://github.com/JajanToons/BackEnd-SiCita.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/JajanToons/BackEndSiCita/issues"
+    "url": "https://github.com/JajanToons/BackEnd-SiCita/issues"
   },
-  "homepage": "https://github.com/JajanToons/BackEndSiCita#readme",
+  "homepage": "https://github.com/JajanToons/BackEnd-SiCita#readme",
   "dependencies": {
     "argon2": "^0.43.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "firebase-admin": "^13.5.0",
+    "firebase-admin": "^12.1.0",
     "google-auth-library": "^10.2.0",
     "jsonwebtoken": "^9.0.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pg": "^8.15.6",
-    "socket.io": "^4.8.1",
-    "web-push": "^3.6.7"
+    "socket.io": "^4.8.1"
   }
 }
