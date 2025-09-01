@@ -49,13 +49,18 @@ export const notificationController = {
    */
   async updateNotificationPreferences(req, res, next) {
     try {
-      const { subscriptionEndpoint, deviceIds } = req.body;
-      // Validasi dasar bisa ditambahkan di sini jika diperlukan,
-      // tapi service sudah melakukan validasi yang lebih detail.
-      await notificationService.updateNotificationPreferences(
+      // ▼▼▼ PERBAIKAN DI SINI ▼▼▼
+      // Ambil fcmToken dari body bersama dengan data lainnya
+      const { subscriptionEndpoint, fcmToken, deviceIds } = req.body;
+      
+      // Kirim semua parameter yang relevan ke service dalam satu objek
+      await notificationService.updateNotificationPreferences({
         subscriptionEndpoint,
-        deviceIds
-      );
+        fcmToken,
+        deviceIds,
+      });
+      // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+      
       res
         .status(200)
         .json({ message: "Notification preferences updated successfully." });

@@ -15,35 +15,42 @@ class AppError extends Error {
 export const notificationService = {
   /**
    * Menyimpan langganan push baru.
-   * @param {Object} subscriptionObject - Objek PushSubscription dari browser.
+   * @param {Object} subscriptionObject - Objek PushSubscription dari browser atau objek {fcmToken: "..."} dari mobile.
    * @returns {Promise<Object>} Objek langganan yang disimpan.
    */
   async subscribeToPush(subscriptionObject) {
-    if (
-      !subscriptionObject ||
-      !subscriptionObject.endpoint ||
-      !subscriptionObject.keys?.p256dh ||
-      !subscriptionObject.keys?.auth
-    ) {
-      throw new AppError("Invalid subscription object provided.", 400);
+    // ▼▼▼ PERBAIKAN DI SINI ▼▼▼
+    let finalSubscriptionObject = { ...subscriptionObject };
+
+    // Handle mobile FCM token by converting it to a Web Push subscription object
+    if (finalSubscriptionObject.fcmToken && !finalSubscriptionObject.endpoint) {
+      console.log(`[Notification Service] Received FCM token. Converting to Web Push format.`);
+      finalSubscriptionObject = {
+        endpoint: `https://fcm.googleapis.com/fcm/send/${finalSubscriptionObject.fcmToken}`,
+        // web-push library requires a keys object, even if empty for VAPID with FCM
+        keys: {},
+      };
     }
+
+    if (!finalSubscriptionObject || !finalSubscriptionObject.endpoint) {
+      throw new AppError("Invalid subscription object or FCM token provided.", 400);
+    }
+    // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
 
     // Cek apakah langganan dengan endpoint yang sama sudah ada
     const existingSubscription = await pushSubscriptionModel.findByEndpoint(
-      subscriptionObject.endpoint
+      finalSubscriptionObject.endpoint
     );
     if (existingSubscription) {
       console.log(
-        `[Notification Service] Subscription with endpoint ${subscriptionObject.endpoint} already exists (ID: ${existingSubscription.id}). Returning existing.`
+        `[Notification Service] Subscription with endpoint ${finalSubscriptionObject.endpoint} already exists (ID: ${existingSubscription.id}). Returning existing.`
       );
-      // Anda bisa memilih untuk mengembalikan yang sudah ada atau menganggapnya sebagai sukses
-      // Untuk saat ini, kita kembalikan yang sudah ada
       return existingSubscription;
     }
 
     // Jika belum ada, buat yang baru
     const newSubscription = await pushSubscriptionModel.create(
-      subscriptionObject
+      finalSubscriptionObject
     );
     console.log(
       `[Notification Service] New push subscription created with ID: ${newSubscription.id}`
@@ -65,11 +72,10 @@ export const notificationService = {
       subscriptionEndpoint
     );
     if (!subscription) {
-      // Jika langganan tidak ditemukan, berarti belum ada preferensi.
       console.log(
         `[Notification Service] No subscription found for endpoint ${subscriptionEndpoint} when fetching preferences.`
       );
-      return []; // Kembalikan array kosong
+      return [];
     }
 
     return await notificationPreferenceModel.findBySubscriptionId(
@@ -79,41 +85,48 @@ export const notificationService = {
 
   /**
    * Memperbarui preferensi notifikasi perangkat untuk suatu langganan push.
-   * @param {string} subscriptionEndpoint - URL endpoint unik dari PushSubscription.
-   * @param {Array<string>} deviceIds - Array device_id yang dipilih.
+   * @param {Object} params - Objek berisi { subscriptionEndpoint?, fcmToken?, deviceIds }
    * @returns {Promise<void>}
    */
-  async updateNotificationPreferences(subscriptionEndpoint, deviceIds) {
-    if (!subscriptionEndpoint || typeof subscriptionEndpoint !== "string") {
-      throw new AppError("Subscription endpoint is required.", 400);
+  async updateNotificationPreferences(params) {
+    // ▼▼▼ PERBAIKAN DI SINI ▼▼▼
+    const { subscriptionEndpoint, fcmToken, deviceIds } = params;
+    
+    let endpointToUse = subscriptionEndpoint;
+    if (fcmToken && !endpointToUse) {
+      endpointToUse = `https://fcm.googleapis.com/fcm/send/${fcmToken}`;
     }
+
+    if (!endpointToUse || typeof endpointToUse !== 'string') {
+        throw new AppError("Subscription endpoint or FCM token is required.", 400);
+    }
+    // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+
     if (!Array.isArray(deviceIds)) {
       throw new AppError("deviceIds must be an array.", 400);
     }
-    // Validasi isi deviceIds (semua harus string)
     for (const id of deviceIds) {
       if (typeof id !== "string") {
         throw new AppError("All deviceIds in the array must be strings.", 400);
       }
     }
 
-    const client = await pool.connect(); // Dapatkan klien untuk transaksi
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
-
+      
+      // Gunakan endpointToUse yang sudah ditentukan
       const subscription = await pushSubscriptionModel.findByEndpoint(
-        subscriptionEndpoint
-      ); // Gunakan findByEndpoint dari model
+        endpointToUse
+      );
       if (!subscription) {
-        await client.query("ROLLBACK"); // Tidak perlu, findByEndpoint bukan bagian transaksi ini
         throw new AppError(
-          "Push subscription not found for the given endpoint.",
+          "Push subscription not found for the given endpoint/token.",
           404
         );
       }
       const pushSubscriptionDbId = subscription.id;
 
-      // Hapus preferensi lama menggunakan model, dengan passing client
       await notificationPreferenceModel.deleteBySubscriptionId(
         pushSubscriptionDbId,
         client
@@ -121,13 +134,8 @@ export const notificationService = {
       console.log(
         `[Notification Service] Old preferences deleted for push_subscription_id: ${pushSubscriptionDbId}`
       );
-
-      // Masukkan preferensi baru jika ada, menggunakan model, dengan passing client
-      // Model createMany akan melakukan loop INSERT atau bulk insert
-      // Model juga bisa melakukan validasi deviceId terhadap tabel devices jika diimplementasikan
+      
       if (deviceIds.length > 0) {
-        // Di sini, kita bisa tambahkan validasi apakah semua deviceId ada di tabel devices
-        // sebelum memanggil createMany. Untuk sekarang, kita asumsikan valid.
         await notificationPreferenceModel.createMany(
           pushSubscriptionDbId,
           deviceIds,
@@ -151,7 +159,6 @@ export const notificationService = {
         "[Notification Service] Error updating notification preferences:",
         error
       );
-      // Lemparkan error asli atau error kustom
       if (error instanceof AppError) throw error;
       throw new AppError("Failed to update notification preferences.", 500);
     } finally {
@@ -176,7 +183,6 @@ export const notificationService = {
     );
 
     try {
-      // Gunakan model untuk mengambil subscriber yang relevan
       const relevantSubscriptions =
         await pushSubscriptionModel.findAllSubscribersForDevice(
           triggeringDeviceId
@@ -187,6 +193,7 @@ export const notificationService = {
           `[Notification Service] Found ${relevantSubscriptions.length} subscriptions for device ${triggeringDeviceId}.`
         );
 
+        // Payload ini akan dikirim sebagai "data" payload ke FCM
         const notificationPushPayload = JSON.stringify({
           title:
             alertFullPayload.title ||
@@ -201,7 +208,7 @@ export const notificationService = {
         });
 
         const sendPromises = relevantSubscriptions.map((row) => {
-          const subscriptionObject = row.subscription_object; // Model mengembalikan objek langganan penuh
+          const subscriptionObject = row.subscription_object;
           const subscriptionDbId = row.push_subscription_db_id;
 
           return webpush
@@ -221,17 +228,12 @@ export const notificationService = {
                 console.log(
                   `[Notification Service] Subscription ID ${subscriptionDbId} is invalid. Deleting.`
                 );
-                // Hapus langganan yang tidak valid menggunakan model
                 return pushSubscriptionModel
                   .deleteById(subscriptionDbId)
                   .then((deleted) => {
                     if (deleted)
                       console.log(
                         `[Notification Service] Deleted invalid subscription ID ${subscriptionDbId}`
-                      );
-                    else
-                      console.warn(
-                        `[Notification Service] Failed to confirm deletion of invalid subscription ID ${subscriptionDbId}`
                       );
                   })
                   .catch((deleteErr) =>
