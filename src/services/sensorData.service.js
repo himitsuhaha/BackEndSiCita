@@ -372,8 +372,16 @@ export const sensorDataService = {
           console.log(
             `[Alert Logic] ${floodAlertType} alert for ${deviceId} is still active. Current msg: "${floodAlertMessage}". DB msg: "${activeFloodAlert.message}"`
           );
-          // Update alert jika pesan atau severity berubah, atau cukup perbarui timestamp 'last_seen_active' jika ada field itu
-          // Untuk saat ini, kita asumsikan jika masih aktif dan kondisi sama, tidak perlu update DB kecuali ada perubahan signifikan
+          
+          // ▼▼▼ PERBAIKAN DITERAPKAN DI SINI ▼▼▼
+          notificationService
+            .sendFloodAlertPushNotification(
+              deviceId,
+              alertPayloadForNotification
+            )
+            .catch(console.error);
+          // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+
           alertInfo = {
             triggered: true,
             message: floodAlertMessage, // Gunakan pesan saat ini
@@ -481,7 +489,7 @@ export const sensorDataService = {
             `[Alert Logic] Created new ${rapidRiseAlertType} alert for ${deviceId}`
           );
           io.emit("rapid_water_rise_alert", rapidRisePayloadForNotification);
-          // notificationService.sendPushNotification(deviceId, rapidRisePayloadForNotification).catch(console.error); // Aktifkan jika ada fungsi khusus
+          notificationService.sendFloodAlertPushNotification(deviceId, rapidRisePayloadForNotification).catch(console.error);
           if (!alertInfo.triggered || rapidRiseSeverity === "critical") {
             // Prioritaskan alertInfo jika ini kritis atau belum ada yg trigger
             alertInfo = {
@@ -494,6 +502,9 @@ export const sensorDataService = {
           console.log(
             `[Alert Logic] ${rapidRiseAlertType} alert for ${deviceId} is still active. Current msg: "${rapidRiseMessage}". DB msg: "${activeRapidRiseAlert.message}"`
           );
+          // ▼▼▼ PERBAIKAN DITERAPKAN DI SINI ▼▼▼
+          notificationService.sendFloodAlertPushNotification(deviceId, rapidRisePayloadForNotification).catch(console.error);
+          // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
           if (!alertInfo.triggered || rapidRiseSeverity === "critical") {
             alertInfo = {
               triggered: true,
@@ -614,6 +625,14 @@ export const sensorDataService = {
           console.log(
             `[Alert Logic] ${criticalWqAlertType} alert for ${deviceId} is still active. Current msg: "${criticalWqMessage}". DB msg: "${activeCriticalWqAlert.message}"`
           );
+          // ▼▼▼ PERBAIKAN DITERAPKAN DI SINI ▼▼▼
+          notificationService
+            .sendFloodAlertPushNotification(
+              deviceId,
+              qualityAlertPayloadForNotification
+            )
+            .catch(console.error);
+          // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
           if (!alertInfo.triggered || criticalWqSeverity === "critical") {
             alertInfo = {
               triggered: true,

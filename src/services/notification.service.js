@@ -15,11 +15,10 @@ class AppError extends Error {
 export const notificationService = {
   /**
    * Menyimpan langganan push baru.
-   * @param {Object} subscriptionObject - Objek PushSubscription dari browser atau objek {fcmToken: "..."} dari mobile.
+   * @param {Object} subscriptionObject - Objek PushSubscription dari browser atau {fcmToken: ...} dari mobile.
    * @returns {Promise<Object>} Objek langganan yang disimpan.
    */
   async subscribeToPush(subscriptionObject) {
-    // ▼▼▼ PERBAIKAN DI SINI ▼▼▼
     let finalSubscriptionObject = { ...subscriptionObject };
 
     // Handle mobile FCM token by converting it to a Web Push subscription object
@@ -32,10 +31,12 @@ export const notificationService = {
       };
     }
 
-    if (!finalSubscriptionObject || !finalSubscriptionObject.endpoint) {
+    if (
+      !finalSubscriptionObject ||
+      !finalSubscriptionObject.endpoint
+    ) {
       throw new AppError("Invalid subscription object or FCM token provided.", 400);
     }
-    // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
 
     // Cek apakah langganan dengan endpoint yang sama sudah ada
     const existingSubscription = await pushSubscriptionModel.findByEndpoint(
@@ -72,10 +73,11 @@ export const notificationService = {
       subscriptionEndpoint
     );
     if (!subscription) {
+      // Jika langganan tidak ditemukan, berarti belum ada preferensi.
       console.log(
         `[Notification Service] No subscription found for endpoint ${subscriptionEndpoint} when fetching preferences.`
       );
-      return [];
+      return []; // Kembalikan array kosong
     }
 
     return await notificationPreferenceModel.findBySubscriptionId(
@@ -89,7 +91,6 @@ export const notificationService = {
    * @returns {Promise<void>}
    */
   async updateNotificationPreferences(params) {
-    // ▼▼▼ PERBAIKAN DI SINI ▼▼▼
     const { subscriptionEndpoint, fcmToken, deviceIds } = params;
     
     let endpointToUse = subscriptionEndpoint;
@@ -100,26 +101,26 @@ export const notificationService = {
     if (!endpointToUse || typeof endpointToUse !== 'string') {
         throw new AppError("Subscription endpoint or FCM token is required.", 400);
     }
-    // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
-
+    
     if (!Array.isArray(deviceIds)) {
       throw new AppError("deviceIds must be an array.", 400);
     }
+    // Validasi isi deviceIds (semua harus string)
     for (const id of deviceIds) {
       if (typeof id !== "string") {
         throw new AppError("All deviceIds in the array must be strings.", 400);
       }
     }
 
-    const client = await pool.connect();
+    const client = await pool.connect(); // Dapatkan klien untuk transaksi
     try {
       await client.query("BEGIN");
-      
-      // Gunakan endpointToUse yang sudah ditentukan
+
       const subscription = await pushSubscriptionModel.findByEndpoint(
         endpointToUse
       );
       if (!subscription) {
+        await client.query("ROLLBACK");
         throw new AppError(
           "Push subscription not found for the given endpoint/token.",
           404
@@ -127,6 +128,7 @@ export const notificationService = {
       }
       const pushSubscriptionDbId = subscription.id;
 
+      // Hapus preferensi lama menggunakan model, dengan passing client
       await notificationPreferenceModel.deleteBySubscriptionId(
         pushSubscriptionDbId,
         client
@@ -134,7 +136,7 @@ export const notificationService = {
       console.log(
         `[Notification Service] Old preferences deleted for push_subscription_id: ${pushSubscriptionDbId}`
       );
-      
+
       if (deviceIds.length > 0) {
         await notificationPreferenceModel.createMany(
           pushSubscriptionDbId,
@@ -183,6 +185,7 @@ export const notificationService = {
     );
 
     try {
+      // Gunakan model untuk mengambil subscriber yang relevan
       const relevantSubscriptions =
         await pushSubscriptionModel.findAllSubscribersForDevice(
           triggeringDeviceId
@@ -190,20 +193,22 @@ export const notificationService = {
 
       if (relevantSubscriptions.length > 0) {
         console.log(
-          `[Notification Service] Found ${relevantSubscriptions.length} subscriptions for device ${triggeringDeviceId}.`
+          `[Notification Service] Found ${relevantSubscriptions.length} subscription(s) for device ${triggeringDeviceId}. Endpoints:`,
+          relevantSubscriptions.map(s => s.subscription_object.endpoint)
         );
 
-        // Payload ini akan dikirim sebagai "data" payload ke FCM
         const notificationPushPayload = JSON.stringify({
-          title:
-            alertFullPayload.title ||
-            `🚨 PERINGATAN BANJIR: ${triggeringDeviceId} 🚨`,
-          body:
-            alertFullPayload.body || alertFullPayload.message.substring(0, 200),
-          icon: alertFullPayload.icon || "/icons/icon-192x192.png",
-          badge: alertFullPayload.badge || "/icons/badge-72x72.png",
-          data: alertFullPayload.data || {
-            url: `/dashboard?deviceId=${triggeringDeviceId}&alert=true`,
+          notification: {
+            title:
+              alertFullPayload.title ||
+              `🚨 PERINGATAN BANJIR: ${triggeringDeviceId} 🚨`,
+            body:
+              alertFullPayload.body || alertFullPayload.message.substring(0, 200),
+            icon: alertFullPayload.icon || "/icons/icon-192x192.png",
+          },
+          data: {
+            ...alertFullPayload,
+            url: alertFullPayload.data?.url || `/dashboard?deviceId=${triggeringDeviceId}&alert=true`,
           },
         });
 
@@ -228,12 +233,17 @@ export const notificationService = {
                 console.log(
                   `[Notification Service] Subscription ID ${subscriptionDbId} is invalid. Deleting.`
                 );
+                // Hapus langganan yang tidak valid menggunakan model
                 return pushSubscriptionModel
                   .deleteById(subscriptionDbId)
                   .then((deleted) => {
                     if (deleted)
                       console.log(
                         `[Notification Service] Deleted invalid subscription ID ${subscriptionDbId}`
+                      );
+                    else
+                      console.warn(
+                        `[Notification Service] Failed to confirm deletion of invalid subscription ID ${subscriptionDbId}`
                       );
                   })
                   .catch((deleteErr) =>
