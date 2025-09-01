@@ -1,5 +1,5 @@
 // src/services/notification.service.js
-import webpush from "web-push";
+import admin from "firebase-admin"; // <-- PERUBAHAN UTAMA: Menggunakan Firebase Admin SDK
 import { pool } from "../config/database.config.js"; // Impor pool untuk transaksi manual
 import { pushSubscriptionModel } from "../models/pushSubscription.model.js";
 import { notificationPreferenceModel } from "../models/notificationPreference.model.js";
@@ -12,18 +12,26 @@ class AppError extends Error {
   }
 }
 
+// Fungsi helper untuk mengekstrak token dari URL endpoint FCM
+function extractTokenFromEndpoint(endpoint) {
+    if (typeof endpoint !== 'string') return null;
+    const parts = endpoint.split('/');
+    return parts.pop() || null;
+}
+
+
 export const notificationService = {
   /**
    * Menyimpan langganan push baru.
-   * @param {Object} subscriptionObject - Objek PushSubscription dari browser atau {fcmToken: ...} dari mobile.
+   * @param {Object} subscriptionObject - Objek PushSubscription dari browser atau objek {fcmToken: "..."} dari mobile.
    * @returns {Promise<Object>} Objek langganan yang disimpan.
    */
   async subscribeToPush(subscriptionObject) {
     let finalSubscriptionObject = { ...subscriptionObject };
 
-    // Handle mobile FCM token by converting it to a Web Push subscription object
+    // Handle mobile FCM token by converting it to a Web Push subscription object format for storage
     if (finalSubscriptionObject.fcmToken && !finalSubscriptionObject.endpoint) {
-      console.log(`[Notification Service] Received FCM token. Converting to Web Push format.`);
+      console.log(`[Notification Service] Received FCM token. Converting to Web Push format for DB.`);
       finalSubscriptionObject = {
         endpoint: `https://fcm.googleapis.com/fcm/send/${finalSubscriptionObject.fcmToken}`,
         // web-push library requires a keys object, even if empty for VAPID with FCM
@@ -33,7 +41,7 @@ export const notificationService = {
 
     if (
       !finalSubscriptionObject ||
-      !finalSubscriptionObject.endpoint
+      !finalSubscriptionObject.endpoint 
     ) {
       throw new AppError("Invalid subscription object or FCM token provided.", 400);
     }
@@ -46,6 +54,8 @@ export const notificationService = {
       console.log(
         `[Notification Service] Subscription with endpoint ${finalSubscriptionObject.endpoint} already exists (ID: ${existingSubscription.id}). Returning existing.`
       );
+      // Anda bisa memilih untuk mengembalikan yang sudah ada atau menganggapnya sebagai sukses
+      // Untuk saat ini, kita kembalikan yang sudah ada
       return existingSubscription;
     }
 
@@ -137,6 +147,7 @@ export const notificationService = {
         `[Notification Service] Old preferences deleted for push_subscription_id: ${pushSubscriptionDbId}`
       );
 
+      // Masukkan preferensi baru jika ada, menggunakan model, dengan passing client
       if (deviceIds.length > 0) {
         await notificationPreferenceModel.createMany(
           pushSubscriptionDbId,
@@ -169,7 +180,7 @@ export const notificationService = {
   },
 
   /**
-   * Mengirim notifikasi Web Push terkait peringatan banjir.
+   * Mengirim notifikasi menggunakan Firebase Admin SDK.
    * @param {string} triggeringDeviceId - ID perangkat yang memicu alert.
    * @param {Object} alertFullPayload - Objek berisi detail alert untuk payload notifikasi.
    */
@@ -185,81 +196,80 @@ export const notificationService = {
     );
 
     try {
-      // Gunakan model untuk mengambil subscriber yang relevan
+      // Gunakan model untuk mengambil subscriber yang relevan (tidak ada perubahan di sini)
       const relevantSubscriptions =
         await pushSubscriptionModel.findAllSubscribersForDevice(
           triggeringDeviceId
         );
 
       if (relevantSubscriptions.length > 0) {
+        // ▼▼▼ BAGIAN UTAMA YANG DIUBAH ▼▼▼
+        
+        // 1. Ekstrak FCM token dari endpoint yang tersimpan di database
+        const tokens = relevantSubscriptions
+            .map(sub => extractTokenFromEndpoint(sub.subscription_object.endpoint))
+            .filter(token => token); // Filter token yang null atau kosong
+
+        if (tokens.length === 0) {
+            console.warn(`[Notification Service] No valid FCM tokens found for device ${triggeringDeviceId}.`);
+            return;
+        }
+
         console.log(
-          `[Notification Service] Found ${relevantSubscriptions.length} subscription(s) for device ${triggeringDeviceId}. Endpoints:`,
-          relevantSubscriptions.map(s => s.subscription_object.endpoint)
+          `[Notification Service] Found ${tokens.length} valid FCM token(s) for device ${triggeringDeviceId}.`
         );
 
-        const notificationPushPayload = JSON.stringify({
+        // 2. Buat payload pesan sesuai format Firebase Admin SDK
+        const message = {
           notification: {
             title:
               alertFullPayload.title ||
               `🚨 PERINGATAN BANJIR: ${triggeringDeviceId} 🚨`,
             body:
-              alertFullPayload.body || alertFullPayload.message.substring(0, 200),
-            icon: alertFullPayload.icon || "/icons/icon-192x192.png",
+              alertFullPayload.body || alertFullPayload.message.substring(0, 250),
           },
-          data: {
-            ...alertFullPayload,
-            url: alertFullPayload.data?.url || `/dashboard?deviceId=${triggeringDeviceId}&alert=true`,
+          data: Object.fromEntries(
+            Object.entries(alertFullPayload).map(([key, value]) => [key, String(value)])
+          ),
+          tokens: tokens, // Kirim ke semua token yang relevan
+          android: {
+              priority: 'high',
+              notification: {
+                  // Pastikan Channel ID ini sama persis dengan yang ada di aplikasi Android Anda
+                  channel_id: 'FloodWarningChannel_v3' 
+              }
           },
-        });
+        };
 
-        const sendPromises = relevantSubscriptions.map((row) => {
-          const subscriptionObject = row.subscription_object;
-          const subscriptionDbId = row.push_subscription_db_id;
+        // 3. Kirim pesan menggunakan Firebase Admin SDK
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`[Notification Service] FCM send result: ${response.successCount} success, ${response.failureCount} failure.`);
 
-          return webpush
-            .sendNotification(subscriptionObject, notificationPushPayload)
-            .then((sendResult) => {
-              console.log(
-                `[Notification Service] Push sent to ID ${subscriptionDbId} for ${triggeringDeviceId}. Status: ${sendResult.statusCode}`
-              );
-            })
-            .catch((err) => {
-              console.error(
-                `[Notification Service] Error sending push to ID ${subscriptionDbId} (${triggeringDeviceId}): ${
-                  err.statusCode
-                } - ${err.body || err.message}`
-              );
-              if (err.statusCode === 404 || err.statusCode === 410) {
-                console.log(
-                  `[Notification Service] Subscription ID ${subscriptionDbId} is invalid. Deleting.`
-                );
-                // Hapus langganan yang tidak valid menggunakan model
-                return pushSubscriptionModel
-                  .deleteById(subscriptionDbId)
-                  .then((deleted) => {
-                    if (deleted)
-                      console.log(
-                        `[Notification Service] Deleted invalid subscription ID ${subscriptionDbId}`
-                      );
-                    else
-                      console.warn(
-                        `[Notification Service] Failed to confirm deletion of invalid subscription ID ${subscriptionDbId}`
-                      );
-                  })
-                  .catch((deleteErr) =>
-                    console.error(
-                      `[Notification Service] Error deleting subscription ID ${subscriptionDbId}:`,
-                      deleteErr
-                    )
-                  );
+        // 4. Handle token yang sudah tidak valid (opsional tapi sangat direkomendasikan)
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+              if (!resp.success) {
+                const errorCode = resp.error.code;
+                console.error(`[Notification Service] Failed to send to token ${tokens[idx]}:`, errorCode);
+                if (
+                  errorCode === 'messaging/registration-token-not-registered' ||
+                  errorCode === 'messaging/invalid-registration-token'
+                ) {
+                  const badToken = tokens[idx];
+                  const badEndpoint = `https://fcm.googleapis.com/fcm/send/${badToken}`;
+                  console.log(`[Notification Service] Deleting invalid/expired token endpoint: ${badEndpoint}`);
+                  pushSubscriptionModel.findByEndpoint(badEndpoint)
+                    .then(sub => {
+                        if (sub) {
+                           pushSubscriptionModel.deleteById(sub.id);
+                        }
+                    });
+                }
               }
             });
-        });
-
-        await Promise.allSettled(sendPromises);
-        console.log(
-          `[Notification Service] All push notification attempts processed for ${triggeringDeviceId}.`
-        );
+        }
+        
+        // ▲▲▲ AKHIR BAGIAN YANG DIUBAH ▲▲▲
       } else {
         console.log(
           `[Notification Service] No active push subscriptions prefer device ${triggeringDeviceId}.`

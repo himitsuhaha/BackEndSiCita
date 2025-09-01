@@ -103,3 +103,6 @@ tmp/
 *.bak
 *.swp
 *~
+
+# Firebase Admin SDK credentials
+serviceAccountKey.json

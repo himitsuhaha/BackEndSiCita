@@ -3,14 +3,11 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
-import webpush from "web-push";
 import passport from "passport";
+import admin from "firebase-admin"; // <-- IMPORT BARU
 
 import {
   PORT,
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY,
-  VAPID_SUBJECT,
   ALLOWED_ORIGINS,
   SOCKET_IO_CORS_ORIGINS,
 } from "./config/server.config.js";
@@ -19,6 +16,23 @@ import mainApiRouter from "./api/index.js";
 import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 import { deviceStatusService } from "./services/deviceStatus.service.js";
 import { DEVICE_STATUS_CHECK_INTERVAL_MS } from "./config/server.config.js";
+
+// ▼▼▼ INISIALISASI FIREBASE ADMIN SDK ▼▼▼
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+// Pastikan file serviceAccountKey.json ada di folder src/config/
+try {
+  const serviceAccount = require("./config/serviceAccountKey.json");
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log("Firebase Admin SDK berhasil diinisialisasi.");
+} catch (error) {
+  console.error("Gagal menginisialisasi Firebase Admin SDK. Pastikan file 'src/config/serviceAccountKey.json' ada dan benar.", error);
+  process.exit(1); // Hentikan server jika Firebase gagal diinisialisasi
+}
+// ▲▲▲ AKHIR INISIALISASI ▲▲▲
+
 
 const app = express();
 
@@ -54,15 +68,6 @@ io.on("connection", (socket) => {
     console.log(`Klien Socket.IO terputus: ${socket.id}`);
   });
 });
-
-if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
-  console.error(
-    "VAPID keys atau subject tidak dikonfigurasi di server.config.js (dari .env)."
-  );
-} else {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  console.log("Web-push VAPID details berhasil dikonfigurasi.");
-}
 
 // --- ROUTES ---
 app.get("/", (req, res) => {
