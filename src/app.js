@@ -4,7 +4,7 @@ import cors from "cors";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import passport from "passport";
-import admin from "firebase-admin"; // <-- IMPORT BARU
+import admin from "firebase-admin";
 
 import {
   PORT,
@@ -17,21 +17,19 @@ import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 import { deviceStatusService } from "./services/deviceStatus.service.js";
 import { DEVICE_STATUS_CHECK_INTERVAL_MS } from "./config/server.config.js";
 
-// ▼▼▼ INISIALISASI FIREBASE ADMIN SDK ▼▼▼
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-// Pastikan file serviceAccountKey.json ada di folder src/config/
+// ▼▼▼ PERBAIKAN DI SINI: Ganti cara memuat file JSON ▼▼▼
+import serviceAccount from "./config/serviceAccountKey.json" with { type: "json" };
+
 try {
-  const serviceAccount = require("./config/serviceAccountKey.json");
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
   console.log("Firebase Admin SDK berhasil diinisialisasi.");
 } catch (error) {
   console.error("Gagal menginisialisasi Firebase Admin SDK. Pastikan file 'src/config/serviceAccountKey.json' ada dan benar.", error);
-  process.exit(1); // Hentikan server jika Firebase gagal diinisialisasi
+  process.exit(1);
 }
-// ▲▲▲ AKHIR INISIALISASI ▲▲▲
+// ▲▲▲ AKHIR PERBAIKAN ▲▲▲
 
 
 const app = express();
