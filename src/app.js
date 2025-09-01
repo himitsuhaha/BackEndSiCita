@@ -6,6 +6,13 @@ import { Server as SocketIOServer } from "socket.io";
 import passport from "passport";
 import admin from "firebase-admin";
 
+// ▼▼▼ PERBAIKAN DI SINI: Ganti cara memuat file JSON ▼▼▼
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+// ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+
+
 import {
   PORT,
   ALLOWED_ORIGINS,
@@ -17,10 +24,18 @@ import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 import { deviceStatusService } from "./services/deviceStatus.service.js";
 import { DEVICE_STATUS_CHECK_INTERVAL_MS } from "./config/server.config.js";
 
-// ▼▼▼ PERBAIKAN DI SINI: Ganti cara memuat file JSON ▼▼▼
-import serviceAccount from "./config/serviceAccountKey.json" with { type: "json" };
-
+// ▼▼▼ PERBAIKAN DI SINI: Gunakan 'fs' untuk membaca file ▼▼▼
 try {
+  // Dapatkan path absolut ke direktori saat ini
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  
+  // Buat path yang benar ke file serviceAccountKey.json
+  const serviceAccountPath = path.join(__dirname, 'config', 'serviceAccountKey.json');
+  
+  // Baca file dan parse sebagai JSON
+  const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
@@ -30,7 +45,6 @@ try {
   process.exit(1);
 }
 // ▲▲▲ AKHIR PERBAIKAN ▲▲▲
-
 
 const app = express();
 
